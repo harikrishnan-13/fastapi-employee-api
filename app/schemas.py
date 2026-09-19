@@ -1,4 +1,5 @@
-from pydantic import BaseModel, EmailStr
+
+from pydantic import BaseModel, ConfigDict, EmailStr
 
 
 class EmployeeCreate(BaseModel):
@@ -13,17 +14,22 @@ class EmployeeResponse(BaseModel):
     email: EmailStr
     department: str
 
-    class Config:
-        from_attributes = True
-        
+    model_config = ConfigDict(
+        from_attributes=True
+    )
+
+
+class EmployeeListResponse(BaseModel):
+    page: int
+    page_size: int
+    total_count: int
+    total_pages: int
+    data: list[EmployeeResponse]
+
+
 class UserCreate(BaseModel):
     username: str
     email: EmailStr
-    password: str
-
-
-class UserLogin(BaseModel):
-    username: str
     password: str
 
 

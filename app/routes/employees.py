@@ -1,11 +1,16 @@
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models import Employee
-from app.schemas import EmployeeCreate, EmployeeResponse
+from app.schemas import (
+    EmployeeCreate,
+    EmployeeResponse,
+    EmployeeListResponse
+)
 from app.security import get_current_user
 
 
@@ -43,16 +48,60 @@ def create_employee(
     return new_employee
 
 
-@router.get("/", response_model=list[EmployeeResponse])
+@router.get(
+    "/",
+    response_model=EmployeeListResponse
+)
 def get_employees(
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(
+        default=10,
+        ge=1,
+        le=100
+    ),
+    search: str | None = Query(default=None),
     db: Session = Depends(get_db)
 ):
-    employees = db.query(Employee).all()
+    query = db.query(Employee)
 
-    return employees
+    if search:
+        search_value = f"%{search}%"
+
+        query = query.filter(
+            or_(
+                Employee.name.ilike(search_value),
+                Employee.email.ilike(search_value),
+                Employee.department.ilike(search_value)
+            )
+        )
+
+    total_count = query.count()
+
+    employees = (
+        query
+        .order_by(Employee.id)
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+        .all()
+    )
+
+    total_pages = (
+        (total_count + page_size - 1) // page_size
+    )
+
+    return {
+        "page": page,
+        "page_size": page_size,
+        "total_count": total_count,
+        "total_pages": total_pages,
+        "data": employees
+    }
 
 
-@router.get("/{employee_id}", response_model=EmployeeResponse)
+@router.get(
+    "/{employee_id}",
+    response_model=EmployeeResponse
+)
 def get_employee_by_id(
     employee_id: int,
     db: Session = Depends(get_db)
@@ -72,7 +121,10 @@ def get_employee_by_id(
     return employee
 
 
-@router.put("/{employee_id}", response_model=EmployeeResponse)
+@router.put(
+    "/{employee_id}",
+    response_model=EmployeeResponse
+)
 def update_employee(
     employee_id: int,
     employee_data: EmployeeCreate,

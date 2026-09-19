@@ -1,40 +1,51 @@
+
 import os
 
 from datetime import datetime, timedelta, timezone
 
 from dotenv import load_dotenv
-from jose import jwt, JWTError
-from pwdlib import PasswordHash
-
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
-
+from jose import JWTError, jwt
+from pwdlib import PasswordHash
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models import User
 
 
-
 load_dotenv()
 
 
+# Password hashing configuration
 password_hash = PasswordHash.recommended()
 
 
+# JWT configuration
 JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY")
-JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
-JWT_ACCESS_TOKEN_EXPIRE_MINUTES = int(
-    os.getenv("JWT_ACCESS_TOKEN_EXPIRE_MINUTES", "30")
-)
 
 if not JWT_SECRET_KEY:
     raise RuntimeError(
         "JWT_SECRET_KEY is not configured in .env"
     )
 
+JWT_ALGORITHM = os.getenv(
+    "JWT_ALGORITHM",
+    "HS256"
+)
+
+JWT_ACCESS_TOKEN_EXPIRE_MINUTES = int(
+    os.getenv(
+        "JWT_ACCESS_TOKEN_EXPIRE_MINUTES",
+        "30"
+    )
+)
+
 
 def hash_password(password: str) -> str:
+    """
+    Hash a plain-text password.
+    """
     return password_hash.hash(password)
 
 
@@ -42,6 +53,9 @@ def verify_password(
     plain_password: str,
     hashed_password: str
 ) -> bool:
+    """
+    Verify a plain password against its hash.
+    """
     return password_hash.verify(
         plain_password,
         hashed_password
@@ -49,9 +63,14 @@ def verify_password(
 
 
 def create_access_token(data: dict) -> str:
+    """
+    Create a JWT access token.
+    """
     to_encode = data.copy()
 
-    expire = datetime.now(timezone.utc) + timedelta(
+    expire = datetime.now(
+        timezone.utc
+    ) + timedelta(
         minutes=JWT_ACCESS_TOKEN_EXPIRE_MINUTES
     )
 
@@ -67,6 +86,8 @@ def create_access_token(data: dict) -> str:
 
     return encoded_jwt
 
+
+# Swagger OAuth2 configuration
 oauth2_scheme = OAuth2PasswordBearer(
     tokenUrl="/auth/login"
 )
@@ -75,6 +96,9 @@ oauth2_scheme = OAuth2PasswordBearer(
 def verify_access_token(
     token: str = Depends(oauth2_scheme)
 ):
+    """
+    Validate the JWT token.
+    """
     try:
         payload = jwt.decode(
             token,
@@ -97,11 +121,15 @@ def verify_access_token(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired token"
         )
-        
+
+
 def get_current_user(
     payload: dict = Depends(verify_access_token),
     db: Session = Depends(get_db)
 ):
+    """
+    Get the authenticated user from the database.
+    """
     user_id = payload.get("sub")
 
     if user_id is None:
@@ -112,6 +140,7 @@ def get_current_user(
 
     try:
         user_id = int(user_id)
+
     except (TypeError, ValueError):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
