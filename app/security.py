@@ -9,6 +9,10 @@ from pwdlib import PasswordHash
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 
+from sqlalchemy.orm import Session
+
+from app.database import SessionLocal
+from app.models import User
 
 load_dotenv()
 
@@ -86,3 +90,28 @@ def verify_access_token(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired token"
         )
+        
+def get_current_user(
+    payload: dict = Depends(verify_access_token)
+):
+    db = SessionLocal()
+
+    try:
+        user_id = int(payload["sub"])
+
+        user = (
+            db.query(User)
+            .filter(User.id == user_id)
+            .first()
+        )
+
+        if user is None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="User not found"
+            )
+
+        return user
+
+    finally:
+        db.close()

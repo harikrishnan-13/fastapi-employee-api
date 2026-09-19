@@ -5,13 +5,14 @@ from sqlalchemy.orm import Session
 from app.database import SessionLocal
 from app.models import Employee
 from app.schemas import EmployeeCreate, EmployeeResponse
-from app.security import verify_access_token
+from app.security import get_current_user
+from app.security import get_current_user
 
 
 router = APIRouter(
     prefix="/employees",
     tags=["Employees"],
-    dependencies=[Depends(verify_access_token)]
+    dependencies=[Depends(get_current_user)]
 )
 
 
