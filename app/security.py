@@ -11,8 +11,10 @@ from fastapi.security import OAuth2PasswordBearer
 
 from sqlalchemy.orm import Session
 
-from app.database import SessionLocal
+from app.database import get_db
 from app.models import User
+
+
 
 load_dotenv()
 
@@ -25,6 +27,11 @@ JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
 JWT_ACCESS_TOKEN_EXPIRE_MINUTES = int(
     os.getenv("JWT_ACCESS_TOKEN_EXPIRE_MINUTES", "30")
 )
+
+if not JWT_SECRET_KEY:
+    raise RuntimeError(
+        "JWT_SECRET_KEY is not configured in .env"
+    )
 
 
 def hash_password(password: str) -> str:
@@ -92,26 +99,35 @@ def verify_access_token(
         )
         
 def get_current_user(
-    payload: dict = Depends(verify_access_token)
+    payload: dict = Depends(verify_access_token),
+    db: Session = Depends(get_db)
 ):
-    db = SessionLocal()
+    user_id = payload.get("sub")
 
-    try:
-        user_id = int(payload["sub"])
-
-        user = (
-            db.query(User)
-            .filter(User.id == user_id)
-            .first()
+    if user_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token"
         )
 
-        if user is None:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="User not found"
-            )
+    try:
+        user_id = int(user_id)
+    except (TypeError, ValueError):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token"
+        )
 
-        return user
+    user = (
+        db.query(User)
+        .filter(User.id == user_id)
+        .first()
+    )
 
-    finally:
-        db.close()
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User not found"
+        )
+
+    return user

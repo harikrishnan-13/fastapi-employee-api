@@ -1,11 +1,11 @@
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.database import SessionLocal
+from app.database import get_db
 from app.models import Employee
 from app.schemas import EmployeeCreate, EmployeeResponse
-from app.security import get_current_user
 from app.security import get_current_user
 
 
@@ -14,15 +14,6 @@ router = APIRouter(
     tags=["Employees"],
     dependencies=[Depends(get_current_user)]
 )
-
-
-def get_db():
-    db = SessionLocal()
-
-    try:
-        yield db
-    finally:
-        db.close()
 
 
 @router.post("/", response_model=EmployeeResponse)
@@ -51,6 +42,7 @@ def create_employee(
 
     return new_employee
 
+
 @router.get("/", response_model=list[EmployeeResponse])
 def get_employees(
     db: Session = Depends(get_db)
@@ -58,6 +50,7 @@ def get_employees(
     employees = db.query(Employee).all()
 
     return employees
+
 
 @router.get("/{employee_id}", response_model=EmployeeResponse)
 def get_employee_by_id(
@@ -77,6 +70,7 @@ def get_employee_by_id(
         )
 
     return employee
+
 
 @router.put("/{employee_id}", response_model=EmployeeResponse)
 def update_employee(
@@ -113,6 +107,7 @@ def update_employee(
         )
 
     return employee
+
 
 @router.delete("/{employee_id}")
 def delete_employee(

@@ -1,11 +1,17 @@
+
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.security import OAuth2PasswordRequestForm
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.database import SessionLocal
+from app.database import get_db
 from app.models import User
-from app.schemas import UserCreate, UserLogin, TokenResponse
-from app.security import hash_password, verify_password, create_access_token
-from fastapi.security import OAuth2PasswordRequestForm
+from app.schemas import UserCreate, TokenResponse
+from app.security import (
+    hash_password,
+    verify_password,
+    create_access_token
+)
 
 
 router = APIRouter(
@@ -14,30 +20,33 @@ router = APIRouter(
 )
 
 
-def get_db():
-    db = SessionLocal()
-
-    try:
-        yield db
-    finally:
-        db.close()
-
-
 @router.post("/register")
 def register_user(
     user_data: UserCreate,
     db: Session = Depends(get_db)
 ):
-    existing_user = (
+    existing_username = (
         db.query(User)
         .filter(User.username == user_data.username)
         .first()
     )
 
-    if existing_user:
+    if existing_username:
         raise HTTPException(
             status_code=400,
             detail="Username already exists"
+        )
+
+    existing_email = (
+        db.query(User)
+        .filter(User.email == user_data.email)
+        .first()
+    )
+
+    if existing_email:
+        raise HTTPException(
+            status_code=400,
+            detail="Email already exists"
         )
 
     new_user = User(
@@ -46,16 +55,29 @@ def register_user(
         hashed_password=hash_password(user_data.password)
     )
 
-    db.add(new_user)
-    db.commit()
-    db.refresh(new_user)
+    try:
+        db.add(new_user)
+        db.commit()
+        db.refresh(new_user)
+
+    except IntegrityError:
+        db.rollback()
+
+        raise HTTPException(
+            status_code=400,
+            detail="Unable to register user"
+        )
 
     return {
         "message": "User registered successfully",
         "username": new_user.username
     }
-    
-@router.post("/login", response_model=TokenResponse)
+
+
+@router.post(
+    "/login",
+    response_model=TokenResponse
+)
 def login_user(
     user_data: OAuth2PasswordRequestForm = Depends(),
     db: Session = Depends(get_db)
@@ -72,10 +94,12 @@ def login_user(
             detail="Invalid username or password"
         )
 
-    if not verify_password(
+    password_valid = verify_password(
         user_data.password,
         user.hashed_password
-    ):
+    )
+
+    if not password_valid:
         raise HTTPException(
             status_code=401,
             detail="Invalid username or password"
